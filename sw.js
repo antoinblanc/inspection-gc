@@ -1,5 +1,5 @@
 /* Service worker – Inspection GC Benban. Keeps the app usable without network. */
-const VERSION='20261023-1501-938ffb';
+const VERSION='20261025-0120-8d4fcb';
 const CACHE='inspection-gc-'+VERSION;
 const APP=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(APP)).then(()=>self.skipWaiting()));});

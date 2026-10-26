@@ -13,7 +13,7 @@
 </head>
 <body>
 <title>Inspection GC Benban</title>
-<meta name="app-version" content="20261023-1501-938ffb">
+<meta name="app-version" content="20261025-0120-8d4fcb">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -46,7 +46,9 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backgroun
 .save{font-family:var(--f-mono);font-size:12px;color:var(--muted);text-align:right;line-height:1.3;flex-shrink:0}
 .save b{font-weight:500}
 .save .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:4px;vertical-align:1px}
-.save .dot.pending{background:var(--warn)} .save .dot.off{background:var(--na)}
+.save .dot.pending{background:var(--warn)}
+.gpsbtn{font:inherit;font-size:13px;font-weight:600;margin-top:4px;padding:6px 10px;border-radius:8px;border:2px solid var(--accent);background:var(--accent-soft);color:var(--fg);cursor:pointer}
+.gpsbtn.off{border-color:var(--nc);background:var(--nc-soft)} .save .dot.off{background:var(--na)}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding-block:6px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:0 0 auto;font-family:var(--f-cond);font-weight:600;font-size:20px;border:2px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:8px 14px;min-height:56px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;cursor:pointer;line-height:1.1}
@@ -2768,7 +2770,12 @@ const urlCache={};
 async function photoURL(p){if(urlCache[p.id])return urlCache[p.id];const r=await getPhoto(p.id);if(r&&r.blob){urlCache[p.id]=URL.createObjectURL(r.blob);return urlCache[p.id];}if(p.url)return p.url;return null;}
 async function photoBlob(p){const r=await getPhoto(p.id);if(r&&r.blob)return r.blob;if(p.url){try{const x=await fetch(p.url);if(x.ok)return await x.blob();}catch(e){}}return null;}
 /* ---------------- GPS ---------------- */
-let lastFix=null, watchId=null, geoWanted=false, geoErr=null;
+let lastFix=null, watchId=null, geoWanted=false, geoErr=null, geoPerm=null;
+function initGeoPerm(){try{if(!navigator.permissions||!navigator.geolocation)return;navigator.permissions.query({name:'geolocation'}).then(p=>{geoPerm=p.state;if(p.state==='granted')startGeo();renderSave();
+  p.onchange=()=>{geoPerm=p.state;if(p.state==='granted')startGeo();renderSave();if(S.tab==='visit')render(true);};}).catch(()=>{});}catch(e){}}
+function geoHelp(){const l=document.querySelector('#layer');const m=document.createElement('div');m.className='modal';
+  m.innerHTML='<div class="sheet" role="dialog" aria-modal="true"><h3>Autoriser la position</h3><div class="note" style="font-size:16px;color:var(--fg)">La position est bloquée pour cette appli. Pour l’autoriser :<ol style="padding-left:20px;margin:8px 0"><li>Vérifie que la <b>localisation du téléphone</b> est activée (volet de notifications).</li><li>Paramètres Android → Applis → <b>Chrome</b> → Autorisations → <b>Position</b> : « Autoriser seulement si l’appli est en cours d’utilisation ».</li><li>Dans <b>Chrome</b> : ⋮ → Paramètres → Paramètres des sites → <b>Position</b> → ouvre le site de l’appli (github.io) → <b>Autoriser</b>.</li><li>Reviens dans l’appli et touche « 📍 Activer le GPS ».</li></ol></div><div class="acts"><button class="btn primary" data-r="1">OK</button></div></div>';
+  m.addEventListener('click',e=>{if(e.target.closest('[data-r]')||e.target===m)m.remove();});l.appendChild(m);}
 const hasGeo=()=>!!(navigator.geolocation);
 function startGeo(){
   geoWanted=true; if(!hasGeo()||watchId!==null)return;
@@ -2917,7 +2924,13 @@ function renderSave(){
   const local=lsOk?('<span class="dot"></span><b>Téléphone</b> '+(lastLocal?fmtTime(lastLocal):'✓')):'<span class="dot off"></span><b>Stockage local bloqué</b>';
   let cloud='';
   if(DB){const map={ok:['','En ligne ✓'],pending:['pending','En ligne…'],offline:['off','Hors ligne'],error:['pending','En ligne : nouvel essai']};const c=map[cloudState]||map.off;cloud='<br><span class="dot '+c[0]+'"></span>'+c[1]+(pend?' · '+pend+' photo'+(pend>1?'s':'')+' à envoyer':'');}
-  let gp='';if(geoWanted){gp='<br>'+(lastFix&&Date.now()-lastFix.at<120000?'<span class="dot"></span>GPS ±'+lastFix.acc+' m':geoErr===1?'<span class="dot off"></span>GPS refusé':'<span class="dot pending"></span>GPS en recherche');}
+  let gp='';
+  if(!IN_CLAUDE&&navigator.geolocation){
+    if(geoPerm==='denied'||geoErr===1)gp='<br><button class="gpsbtn off" data-act="gpshelp"><span class="dot off"></span>GPS bloqué</button>';
+    else if(geoWanted&&lastFix&&Date.now()-lastFix.at<120000)gp='<br><span class="dot"></span>GPS ±'+lastFix.acc+' m';
+    else if(geoWanted)gp='<br><span class="dot pending"></span>GPS en recherche…';
+    else gp='<br><button class="gpsbtn" data-act="gps">📍 Activer le GPS</button>';
+  }
   el.innerHTML=local+cloud+gp;
   $('#brand').innerHTML=v?esc(v.project):'Inspection GC · Benban';
 }
@@ -3058,6 +3071,8 @@ document.addEventListener('click',async e=>{
     if(await confirmSheet('Supprimer la photo ?','La photo sera retirée de ce point.','Supprimer',true)){const id=dp.dataset.delphoto;r.p=r.p.filter(p=>p.id!==id);delPhoto(id);touch(cur());fillThumbs();}return;}
   const vw=e.target.closest('[data-view]');if(vw){const l=$('#layer');const d=document.createElement('div');d.className='lightbox';d.innerHTML='<img src="'+esc(vw.src)+'" alt="Photo">';d.onclick=()=>d.remove();l.appendChild(d);return;}
   const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;const v=cur();
+  if(act==='gps'){geoErr=null;startGeo();renderSave();toast('Accepte la demande de position de Chrome si elle s’affiche.');return;}
+  if(act==='gpshelp'){geoHelp();return;}
   if(act==='goGen'&&v){S.tab='gen';touch();render();}
   else if(act==='addTable'&&v){const t=newTable(v);v.tables.push(t);S.tab=t.id;touch(v);render();toast('Table '+v.tables.length+' ajoutée');}
   else if(act==='delTable'&&v){const t=v.tables.find(x=>x.id===a.dataset.id);if(!t)return;
@@ -3317,6 +3332,7 @@ async function importFiles(files){
 
 /* ---------------- Boot ---------------- */
 S=loadLocal();
+initGeoPerm();
 render();
 initCaps();
 setInterval(()=>{if(Object.values(S.drafts).some(v=>v.dirty))pushCloud();},60000);
